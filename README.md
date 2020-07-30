@@ -3,7 +3,7 @@
 ## Background
 ![image](assets/deep_learning_object_detection_history.png)
 
-## Credit
+## Credits
 
 Overall Theories: 
 - [deep learning object detection](https://github.com/hoya012/deep_learning_object_detection#deep-learning-object-detection)
