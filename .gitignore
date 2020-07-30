@@ -1,1 +1,4 @@
 /outputs
+/official_yolo_files/weight/*.weights
+__pycache__
+*.weights

@@ -357,7 +357,8 @@ if __name__ == "__main__":
     # #  5代表x,y,w,h,conf;
 
     # 03.test darknet
-    cfg_filename = r"D:\Documents\Git_Hub\TneitaP_repo\yoloV3\official_yolo_files\config\yolov3.cfg"
+    cfg_filename = r"official_yolo_files\configs\yolov3.cfg"
+    weight_filename = r"official_yolo_files\weights\yolov3.weights"
     # device = torch.device('cuda:0')
     device = torch.device('cpu')
 
@@ -367,7 +368,7 @@ if __name__ == "__main__":
 
     
     gm_net = Darknet(cfg_filename, img_size = img_size).to(device)
-    
+    gm_net.load_darknet_weights(weight_filename)
 
     y_Tsor = gm_net(img_Tsor)
     print(y_Tsor.shape) 

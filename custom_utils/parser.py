@@ -24,12 +24,9 @@ def parse_model(modeldef_cfg_filename) -> list:
     return module_defs_Lst
 
 
-    
-
-
 
 if __name__ == "__main__":
     
-    cfg_filename = r"D:\Documents\Git_Hub\TneitaP_repo\yoloV3\official_yolo_files\config\yolov3.cfg"
+    cfg_filename = r"official_yolo_files\configs\yolov3.cfg"
 
     parse_model(cfg_filename)
