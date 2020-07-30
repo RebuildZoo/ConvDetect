@@ -44,7 +44,7 @@ class YOLOdetect_config(ut_cfg.config):
             name_Lst = fp.read().split("\n")[:-1]
         return name_Lst
 
-    def non_max_suppression(self, prediction, conf_thres=0.5, nms_thres=0.4):
+    def non_max_suppression(self, prediction, conf_thres=0.85, nms_thres=0.4):
         
         """
         Removes detections with lower object confidence score than 'conf_thres' and performs
@@ -167,7 +167,7 @@ if __name__ == "__main__":
         batch_size= gm_cfg.ld_batchsize,
         shuffle= True,
         num_workers= gm_cfg.ld_workers
-    ) # 1875 * 32
+    ) 
 
     gm_net = dk_detect.Darknet(gm_cfg.yolocfg_filename, img_size=gm_cfg.netin_size).to(gm_cfg.device)
 

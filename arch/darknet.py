@@ -219,8 +219,9 @@ def create_modules(module_defsLst:list):
     return hyperparams, module_list
 
 class Darknet(nn.Module):
-    """YOLOv3 object detection model"""
-
+    '''
+    YOLOv3 object detection model
+    '''
     def __init__(self, config_path, img_size=416):
         super(Darknet, self).__init__()
         self.module_defs = ut_parser.parse_model(config_path)
