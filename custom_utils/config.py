@@ -60,7 +60,9 @@ class config(object):
         print("[net info] para_amount=%d"%para_amount)
 
     def check_path_valid(self, path)->str:
-        assert os.path.isdir(path) or os.path.isfile(path), "invalid path in " + path
+        if not os.path.exists(path):
+            os.mkdir(path)
+        # assert os.path.isdir(path) or os.path.isfile(path), "invalid path in " + path
         return(path)
     
 
