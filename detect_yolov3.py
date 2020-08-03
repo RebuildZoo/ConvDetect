@@ -22,13 +22,13 @@ from matplotlib.ticker import NullLocator
 
 class YOLOdetect_config(ut_cfg.config):
     def __init__(self):
-        super(YOLOdetect_config, self).__init__(pBs = 1, pWn = 2, p_force_cpu = False)
+        super(YOLOdetect_config, self).__init__(pBs = 8, pWn = 2, p_force_cpu = False)
 
         self.path_save_mdroot = self.check_path_valid(os.path.join(ROOT, "outputs", "yolov3"))
         self.path_yolocfg_file = r"official_yolo_files\configs\yolov3.cfg"
         self.path_weight_file = r"official_yolo_files\weights\yolov3.weights"
         self.path_class_file =  r"official_yolo_files\data_names\coco.names"
-        self.class_Lst = self.load_classes(self.path_class_file)
+        self.class_Lst = ut_prs.load_classes(self.path_class_file)
 
         self.imgs_dir = self.check_path_valid(r"test_samples\yolo_samples")
         self.res_dir =self.check_path_valid(os.path.join(self.imgs_dir, "results"))
@@ -41,15 +41,6 @@ class YOLOdetect_config(ut_cfg.config):
         self.nms_thres = 0.4 # iou thresshold for non-maximum suppression
         # for net input map size
         self.netin_size = 416
-        
-    
-    def load_classes(self, path):
-        """
-        Loads class labels at 'path'
-        """
-        with  open(path, "r") as fp:
-            name_Lst = fp.read().split("\n")[:-1]
-        return name_Lst
 
     def init_net(self, pNet):
         if self.method_init == "preTrain":
@@ -117,8 +108,8 @@ if __name__ == "__main__":
 
         # Create plot
         img = np.array(Image.open(path))
-        plt.figure()
-        fig, ax = plt.subplots(1)
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
         ax.imshow(img)
 
         # Draw bounding boxes and labels of detections

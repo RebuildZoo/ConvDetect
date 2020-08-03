@@ -21,16 +21,20 @@ import torch.optim as optim
 
 class YOLOtest_config(ut_cfg.config):
     def __init__(self):
-        super(YOLOdetect_config, self).__init__(pBs = 8, pWn = 2, p_force_cpu = False)
+        super(YOLOtest_config, self).__init__(pBs = 8, pWn = 2, p_force_cpu = False)
+
+        self.path_save_mdroot = self.check_path_valid(os.path.join(ROOT, "outputs", "yolov3"))
+        localtime = time.localtime(time.time())
+        self.path_save_mdid = "yoloVOC" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
 
         self.path_yolocfg_file = r"official_yolo_files\configs\yolov3.cfg"
         self.path_weight_file = r"official_yolo_files\weights\yolov3.weights"
 
         # self.datacfg_filename = r"official_yolo_files\configs\coco.data"
-        self.class_filename =  r"official_yolo_files\data_names\coco.names"
-        self.class_Lst = self.load_classes(self.class_filename)
-        self.path_datatrain_dir = r""
-        self.path_datavali_dir = r""
+        self.path_classname_file =  r"official_yolo_files\data_names\coco.names"
+        self.class_Lst = ut_prs.load_classes(self.path_classname_file)
+        self.path_trainlist_file = r"F:\ZimengZhao_Data\VOC2012\VOCtrainval_11-May-2012\2012_train.txt"
+        self.path_vallist_file = r"F:\ZimengZhao_Data\VOC2012\VOCtrainval_11-May-2012\2012_val.txt"
 
         self.method_init = "preTrain"
 
@@ -40,14 +44,6 @@ class YOLOtest_config(ut_cfg.config):
         self.nms_thres = 0.5 # iou thresshold for non-maximum suppression
 
         self.netin_size = 416
-
-    def load_classes(self, path):
-        """
-        Loads class labels at 'path'
-        """
-        with  open(path, "r") as fp:
-            name_Lst = fp.read().split("\n")[:-1]
-        return name_Lst
 
     def init_net(self, pNet):
         if self.method_init == "preTrain":
@@ -62,7 +58,7 @@ class YOLOtest_config(ut_cfg.config):
     
     def create_dataset(self, istrain):
         
-        q_dataset = fd_ld.ListDataset(path = self.path_datavali_dir, img_size = self.netin_size, augment = False, multiscale = False)
+        q_dataset = fd_ld.ListDataLoader(path = self.path_datavali_dir, img_size = self.netin_size, augment = False, multiscale = False)
 
         return q_dataset
 

@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import custom_utils.parser as ut_parser
+import custom_utils.parser as ut_prs 
 
 class EmptyLayer(nn.Module):
     '''
@@ -52,7 +52,7 @@ class YOLOLayer(nn.Module):
         # Tensors for cuda support
         FloatTensor = torch.cuda.FloatTensor if x.is_cuda else torch.FloatTensor
         LongTensor = torch.cuda.LongTensor if x.is_cuda else torch.LongTensor
-        ByteTensor = torch.cuda.ByteTensor if x.is_cuda else torch.ByteTensor
+        # ByteTensor = torch.cuda.ByteTensor if x.is_cuda else torch.ByteTensor
 
         if img_dim :
             self.img_dim = img_dim
@@ -94,11 +94,9 @@ class YOLOLayer(nn.Module):
             -1,
         )
 
-
-        
         total_loss = 0.0
         if targets is not None:
-            iou_scores, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tcls, tconf = build_targets(
+            iou_scores, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tcls, tconf = ut_prs.build_targets(
                 pred_boxes=pred_boxes,
                 pred_cls=pred_cls,
                 target=targets,
@@ -130,19 +128,19 @@ class YOLOLayer(nn.Module):
             recall75 = torch.sum(iou75 * detected_mask) / (obj_mask.sum() + 1e-16)
 
             self.metrics = {
-                "loss": to_cpu(total_loss).item(),
-                "x": to_cpu(loss_x).item(),
-                "y": to_cpu(loss_y).item(),
-                "w": to_cpu(loss_w).item(),
-                "h": to_cpu(loss_h).item(),
-                "conf": to_cpu(loss_conf).item(),
-                "cls": to_cpu(loss_cls).item(),
-                "cls_acc": to_cpu(cls_acc).item(),
-                "recall50": to_cpu(recall50).item(),
-                "recall75": to_cpu(recall75).item(),
-                "precision": to_cpu(precision).item(),
-                "conf_obj": to_cpu(conf_obj).item(),
-                "conf_noobj": to_cpu(conf_noobj).item(),
+                "loss": total_loss.item(),
+                "x": loss_x.item(),
+                "y": loss_y.item(),
+                "w": loss_w.item(),
+                "h":loss_h.item(),
+                "conf": (loss_conf).item(),
+                "cls": (loss_cls).item(),
+                "cls_acc": (cls_acc).item(),
+                "recall50": (recall50).item(),
+                "recall75": (recall75).item(),
+                "precision": (precision).item(),
+                "conf_obj": (conf_obj).item(),
+                "conf_noobj": (conf_noobj).item(),
                 "grid_size": grid_size,
             }
 
@@ -224,7 +222,7 @@ class Darknet(nn.Module):
     '''
     def __init__(self, config_path, img_size=416):
         super(Darknet, self).__init__()
-        self.module_defs = ut_parser.parse_model(config_path)
+        self.module_defs = ut_prs.parse_model(config_path)
         self.hyperparams, self.module_list = create_modules(self.module_defs)
         self.yolo_layers = [layer[0] for layer in self.module_list if hasattr(layer[0], "metrics")]
         self.img_size = img_size

@@ -2,6 +2,10 @@ import glob
 import random
 import os
 import sys
+ROOT = r"E:\ZimengZhao_Program\RebuidZoo\ConvDetect" #os.getcwd()
+sys.path.append(ROOT)
+import custom_utils.parser as ut_prs
+
 import numpy as np
 from PIL import Image
 import torch
@@ -9,13 +13,79 @@ import torch.nn.functional as F
 
 import torchvision
 import torchvision.transforms as transforms
+
 import matplotlib.pyplot as plt 
+import matplotlib.patches as patches
+from matplotlib.ticker import NullLocator
+
+class_filename = os.path.join(ROOT, r"official_yolo_files\data_names\voc.names") 
 
 def view_tensor(p_img_Tsor):
     # p_img_Tsor = p_img_Tsor / 2 + 0.5     # unnormalize
     img_Arr = p_img_Tsor.numpy()
     plt.imshow(np.transpose(img_Arr, (1, 2, 0)))
     plt.show()
+
+def view_tensor_withBBX(img_Tsor_batch, tar_Tsor_batch, n_rows, return_img = False):
+    # Bounding-box colors
+    cmap = plt.get_cmap("tab20b")
+    colors = [cmap(i) for i in np.linspace(0, 1, 20)]
+    bbox_colors = random.sample(colors, 20)
+
+    classname_Lst = ut_prs.load_classes(class_filename)
+    netin_size = img_Tsor_batch.shape[-1]
+    
+
+    img_idx_batch = tar_Tsor_batch[: , 0].int()
+    cls_idx_batch = tar_Tsor_batch[: , 1].int()
+    x_c_batch = (netin_size * tar_Tsor_batch[: , 2]).int(); 
+    y_c_batch = (netin_size * tar_Tsor_batch[: , 3]).int(); 
+    box_w_batch = (netin_size * tar_Tsor_batch[: , 4]).int(); 
+    box_h_batch = (netin_size * tar_Tsor_batch[: , 5]).int(); 
+
+    x1_batch = x_c_batch - box_w_batch // 2
+    y1_batch = y_c_batch - box_h_batch // 2
+    n_cols = img_Tsor_batch.shape[0] // n_rows
+    
+    fig = plt.figure(figsize= [n_rows*3 ,n_rows*3]) # (default: [6.4, 4.8])
+    tar_idx = 0
+    for img_idx, img_Tsor in enumerate(img_Tsor_batch):
+        img_Arr = img_Tsor.numpy()
+        img_Arr = np.transpose(img_Arr, (1, 2, 0))
+        ax = fig.add_subplot(n_rows, n_cols, img_idx+1)
+        ax.imshow(img_Arr)
+        plt.axis('off')
+
+        while img_idx_batch[tar_idx] == img_idx:
+            cls_gt = cls_idx_batch[tar_idx]
+            color = bbox_colors[cls_gt]
+            x1 = x1_batch[tar_idx]; y1 = y1_batch[tar_idx]
+            bbox = patches.Rectangle((x1, y1), box_w_batch[tar_idx], box_h_batch[tar_idx], 
+                linewidth=2, edgecolor = bbox_colors[cls_gt], facecolor="none")
+            ax.add_patch(bbox)
+            plt.text(x1, y1,
+                    fontsize=12, 
+                    s = classname_Lst[cls_gt],
+                    color="white",
+                    verticalalignment="top",
+                    bbox={"color": color, "pad": 0},
+                )
+            tar_idx += 1
+            if tar_idx == len(tar_Tsor_batch) : break
+    plt.tight_layout(h_pad = 0.1, w_pad= 0.00)
+    if not return_img:
+        plt.show()
+    else : 
+        fig.canvas.draw()
+        img_fig = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+        img_fig = img_fig.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+        img_fig = img_fig / 255.0
+        plt.close(fig)
+        # plt.imshow(img_fig)
+        # plt.show()
+        return img_fig
+
+
 
 def resize(image, size):
     image = F.interpolate(image.unsqueeze(0), size=size, mode="nearest").squeeze(0)
@@ -32,6 +102,11 @@ def pad_to_square(img, pad_value):
     img = F.pad(img, pad, "constant", value=pad_value)
 
     return img, pad
+
+def horisontal_flip(images, targets):
+    images = torch.flip(images, [-1])
+    targets[:, 2] = 1 - targets[:, 2]
+    return images, targets
 
 class ImageFolderLoader(torch.utils.data.Dataset):
     def __init__(self, folder_path, img_size=416):
@@ -52,13 +127,18 @@ class ImageFolderLoader(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.files)
 
-class ListDataset(torch.utils.data.Dataset):
+class ListDataLoader(torch.utils.data.Dataset):
+    '''
+    Deal with the dataset in COCO uniform.
+    For VOC, download script https://pjreddie.com/media/files/voc_label.py and 
+    put into where 'VOCdevkit' lies(/VOC2012/JPEGImages, Annotations, ...)
+    '''
     def __init__(self, list_path, img_size=416, augment=True, multiscale=True, normalized_labels=True):
         with open(list_path, "r") as file:
             self.img_files = file.readlines()
-
+        
         self.label_files = [
-            path.replace("images", "labels").replace(".png", ".txt").replace(".jpg", ".txt")
+            path.replace("images", "labels").replace("JPEGImages", "labels").replace(".png", ".txt").replace(".jpg", ".txt")
             for path in self.img_files
         ]
         self.img_size = img_size
@@ -118,7 +198,7 @@ class ListDataset(torch.utils.data.Dataset):
             boxes[:, 4] *= h_factor / padded_h
 
             targets = torch.zeros((len(boxes), 6))
-            targets[:, 1:] = boxes
+            targets[:, 1:] = boxes # **place 0 are padded by collate_fn in dataloader with batch index
 
         # Apply augmentations
         if self.augment:
@@ -156,7 +236,19 @@ def check_ImageFolderLoader():
         view_Tsor = torchvision.utils.make_grid(tensor = img_Tsor_batch_i, nrow= 4) # (3, H, W)
         view_tensor(view_Tsor)
 
+def check_ListDataLoader():
+    listfile_path = r"F:\ZimengZhao_Data\VOC2012\VOCtrainval_11-May-2012\2012_val.txt" # train
+    g_dataset = ListDataLoader(list_path = listfile_path, img_size = 416, multiscale = False)
+    g_testloader = torch.utils.data.DataLoader(dataset = g_dataset, batch_size= 4, shuffle= False,num_workers= 1, collate_fn = g_dataset.collate_fn) 
+    for batch_i, (img_paths, img_Tsor_batch_i, tar_Tsor_batch_i) in enumerate(g_testloader):
+        print(img_Tsor_batch_i.shape)
+        # print(tar_Tsor_batch_i)
+        # view_Tsor = torchvision.utils.make_grid(tensor = img_Tsor_batch_i, nrow= 4) # (3, H, W)
+        # view_tensor(view_Tsor)
+        view_tensor_withBBX(img_Tsor_batch_i, tar_Tsor_batch_i, 2)
+        
 
 if __name__ == "__main__":
     
-    check_ImageFolderLoader()
+    # check_ImageFolderLoader()
+    check_ListDataLoader()
