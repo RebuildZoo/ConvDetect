@@ -3,9 +3,10 @@ import sys
 ROOT = os.getcwd()
 sys.path.append(ROOT)
 import time
+import datetime
 import tqdm
-
-
+from terminaltables import AsciiTable
+import numpy as np 
 import arch.darknet as dk_detect
 import loaders.imgfolderLoader as fd_ld
 import custom_utils.config as ut_cfg
@@ -27,13 +28,13 @@ import torch.optim as optim
 
 class YOLOtrain_config(ut_cfg.config):
     def __init__(self):
-        super(YOLOtrain_config, self).__init__(pBs = 2, pWn = 1, p_force_cpu = False)
+        super(YOLOtrain_config, self).__init__(pBs = 16, pWn = 2, p_force_cpu = False)
 
         self.path_save_mdroot = self.check_path_valid(os.path.join(ROOT, "outputs", "yolov3"))
         localtime = time.localtime(time.time())
         self.path_save_mdid = "vocimg416_" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
 
-        self.path_yolocfg_file = r"official_yolo_files\configs\yolov3_cls20.cfg"
+        self.path_yolocfg_file = r"official_yolo_files\configs\yolov3-tiny_cls20.cfg" # yolov3_cls20.cfg
         self.path_classname_file =  r"official_yolo_files\data_names\voc.names"
         self.class_Lst = ut_prs.load_classes(self.path_classname_file)
         self.path_trainlist_file = r"F:\ZimengZhao_Data\VOC2012\VOCtrainval_11-May-2012\2012_train.txt"
@@ -46,7 +47,7 @@ class YOLOtrain_config(ut_cfg.config):
         self.training_epoch_amount = 150
         self.save_epoch_begin = 50
         self.save_epoch_interval = 20
-        self.val_epoch_interval = 1
+        self.val_epoch_interval = 20
 
         self.gradient_accumulations = 2 # number of gradient accums before step
 
@@ -94,6 +95,21 @@ class YOLOtrain_config(ut_cfg.config):
 
         return q_dataset
 
+    def name_save_model(self, save_mode, epochX = None):
+        model_type = save_mode.split("_")[1] # netD / netG
+        model_filename = self.path_save_mdid + model_type
+        
+        if "processing" in save_mode:
+            assert epochX is not None, "miss the epoch info" 
+            model_filename += "_%03d"%(epochX) + ".pth"
+        elif "ending" in save_mode:
+            model_filename += "_%03d"%(self.training_epoch_amount) + ".pth"
+        elif "interrupt" in save_mode:
+            model_filename += "_interrupt"+ ".pth"
+        assert os.path.splitext(model_filename)[-1] == ".pth"
+        q_abs_path = os.path.join(self.path_save_mdroot, model_filename)
+        return q_abs_path
+
     def log_in_file(self, *print_paras):
         for para_i in print_paras:
             print(para_i, end= "")
@@ -108,26 +124,28 @@ class YOLOtrain_config(ut_cfg.config):
 
     def evaluate_net(self, pNet):
         pNet.eval()
-
+        testdataset = self.create_dataset(istrain = False)
         testloader = torch.utils.data.DataLoader(
-            dataset = gm_cfg.create_dataset(istrain = False), 
-            batch_size= gm_cfg.ld_batchsize,
+            dataset = testdataset, 
+            batch_size= self.ld_batchsize,
             shuffle= False,
-            num_workers= gm_cfg.ld_workers
+            num_workers= self.ld_workers, 
+            collate_fn = testdataset.collate_fn
         )
 
         labels = []
         sample_metrics = []  # List of tuples (TP, confs, pred)
 
-        for batch_i, (_, imgs, targets) in enumerate(tqdm.tqdm(dataloader, desc="Detecting objects")):
+        for batch_i, (_, imgs, targets) in enumerate(tqdm.tqdm(testloader, desc="Detecting objects")):
 
             # Extract labels
             labels += targets[:, 1].tolist()
             # Rescale target
             targets[:, 2:] = ut_prs.xywh2xyxy(targets[:, 2:])
-            targets[:, 2:] *= img_size
+            targets[:, 2:] *= self.netin_size
 
             imgs = imgs.to(self.device)
+            targets = targets.to(self.device)
 
             with torch.no_grad():
                 outputs = pNet(imgs)
@@ -137,7 +155,7 @@ class YOLOtrain_config(ut_cfg.config):
             
         # Concatenate sample statistics
         true_positives, pred_scores, pred_labels = [np.concatenate(x, 0) for x in list(zip(*sample_metrics))]
-        precision, recall, AP, f1, ap_class = ap_per_class(true_positives, pred_scores, pred_labels, labels)
+        precision, recall, AP, f1, ap_class = ut_prs.ap_per_class(true_positives, pred_scores, pred_labels, labels)
 
         return precision, recall, AP, f1, ap_class
 
@@ -209,7 +227,9 @@ if __name__ == "__main__":
 
                 loss, outputs = gm_net(imgs, targets)
                 loss.backward()
+                # loss, outputs = torch.rand(1), torch.rand(1)
                 loss_an_epoch_Lst.append(loss.item())
+                gm_net.seen += imgs.shape[0]
                 if batches_done % gm_cfg.gradient_accumulations:
                     # Accumulates gradient before each step
                     gm_optimizer.step()
@@ -222,13 +242,13 @@ if __name__ == "__main__":
             delta_t = (time.time()- start)/60
             avg_loss = sum(loss_an_epoch_Lst)/len(loss_an_epoch_Lst)
             loss_an_epoch_Lst.clear()
-            gm_cfg.log_in_board("vocimg416_training loss", {"", metric}, epoch_i)
+            gm_cfg.log_in_board("vocimg416_training loss", {"avg_loss": avg_loss}, epoch_i)
             # Log metrics at each YOLO layer
-            for i, metric in enumerate(metrics):
-                formats = {m: "%.6f" for m in metrics}
+            for i, metric in enumerate(gm_metrics):
+                formats = {m: "%.6f" for m in gm_metrics}
                 formats["grid_size"] = "%2d"
                 formats["cls_acc"] = "%.2f%%"
-                row_metrics = [formats[metric] % yolo.metrics.get(metric, 0) for yolo in model.yolo_layers]
+                row_metrics = [formats[metric] % yolo.metrics.get(metric, 0) for yolo in gm_net.yolo_layers]
                 metric_table += [[metric, *row_metrics]]
 
                 # Tensorboard logging
@@ -237,17 +257,15 @@ if __name__ == "__main__":
                     for name, metric in yolo.metrics.items():
                         if name != "grid_size":
                             # tensorboard_log += [(f"{name}_{j+1}", metric)]
-                            gm_cfg.log_in_board("vocimg416_yololayer%d_"(j) + name, {name, metric}, epoch_i)
+                            gm_cfg.log_in_board("vocimg416_yololayer%d_"%(j) + name, {name: metric}, epoch_i)
             
             log_str = AsciiTable(metric_table).table
             log_str += f"\nTotal loss {avg_loss}"
             # Determine approximate time left for epoch
-            epoch_batches_left = len(dataloader) - (batch_i + 1)
-            time_left = datetime.timedelta(seconds=epoch_batches_left * (time.time() - start_time) / (batch_i + 1))
+            epoch_batches_left = len(gm_trainloader) - (batch_i + 1)
+            time_left = datetime.timedelta(seconds=epoch_batches_left * (time.time() - start) / (batch_i + 1))
             log_str += f"\n---- ETA {time_left}"
             print(log_str)
-
-            gm_net.seen += imgs.shape[0]
 
             if epoch_i % gm_cfg.val_epoch_interval == 0:
                 print("\n---- Evaluating Model ----")
@@ -259,7 +277,7 @@ if __name__ == "__main__":
                     ("val_f1", f1.mean()),
                 ]
                 for metric_i in evaluation_metrics:
-                    gm_cfg.log_in_board("vocimg416_vali_" + metric_i[0], {metric_i[0], metric_i[1]}, epoch_i)
+                    gm_cfg.log_in_board("vocimg416_vali_" + metric_i[0], {metric_i[0]: metric_i[1]}, epoch_i)
             
                 # Print class APs and mAP
                 ap_table = [["Index", "Class name", "AP"]]
