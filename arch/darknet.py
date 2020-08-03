@@ -11,6 +11,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import custom_utils.parser as ut_prs 
 
+def to_cpu(tensor):
+    if tensor.requires_grad: tensor = tensor.detach()
+    if tensor.is_cuda : tensor = tensor.cpu()
+    return tensor
+
 class EmptyLayer(nn.Module):
     '''
     Placeholder for 'route' and 'shortcut' layers
@@ -128,19 +133,19 @@ class YOLOLayer(nn.Module):
             recall75 = torch.sum(iou75 * detected_mask) / (obj_mask.sum() + 1e-16)
 
             self.metrics = {
-                "loss": total_loss.item(),
-                "x": loss_x.item(),
-                "y": loss_y.item(),
-                "w": loss_w.item(),
-                "h":loss_h.item(),
-                "conf": (loss_conf).item(),
-                "cls": (loss_cls).item(),
-                "cls_acc": (cls_acc).item(),
-                "recall50": (recall50).item(),
-                "recall75": (recall75).item(),
-                "precision": (precision).item(),
-                "conf_obj": (conf_obj).item(),
-                "conf_noobj": (conf_noobj).item(),
+                "loss": to_cpu(total_loss).item(),
+                "x": to_cpu(loss_x).item(),
+                "y": to_cpu(loss_y).item(),
+                "w": to_cpu(loss_w).item(),
+                "h": to_cpu(loss_h).item(),
+                "conf": to_cpu(loss_conf).item(),
+                "cls": to_cpu(loss_cls).item(),
+                "cls_acc": to_cpu(cls_acc).item(),
+                "recall50": to_cpu(recall50).item(),
+                "recall75": to_cpu(recall75).item(),
+                "precision": to_cpu(precision).item(),
+                "conf_obj": to_cpu(conf_obj).item(),
+                "conf_noobj": to_cpu(conf_noobj).item(),
                 "grid_size": grid_size,
             }
 
@@ -246,7 +251,7 @@ class Darknet(nn.Module):
                 loss += layer_loss
                 yolo_outputs.append(x)
             layer_outputs.append(x)
-        yolo_outputs = torch.cat(yolo_outputs, 1)
+        yolo_outputs = to_cpu(torch.cat(yolo_outputs, 1))
         return yolo_outputs if targets is None else (loss, yolo_outputs)
 
     def load_darknet_weights(self, weights_path):

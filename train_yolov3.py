@@ -44,10 +44,10 @@ class YOLOtrain_config(ut_cfg.config):
         self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "infomnist_z10unspv_MSE_epoch_loss_log.txt"), 'a+')
         self.writer = SummaryWriter(log_dir=os.path.join(self.path_save_mdroot, "board"))
 
-        self.training_epoch_amount = 150
+        self.training_epoch_amount = 160
         self.save_epoch_begin = 50
         self.save_epoch_interval = 20
-        self.val_epoch_interval = 20
+        self.val_epoch_interval = 40
 
         self.gradient_accumulations = 2 # number of gradient accums before step
 
@@ -145,7 +145,7 @@ class YOLOtrain_config(ut_cfg.config):
             targets[:, 2:] *= self.netin_size
 
             imgs = imgs.to(self.device)
-            targets = targets.to(self.device)
+            # targets = targets.to(self.device)
 
             with torch.no_grad():
                 outputs = pNet(imgs)
@@ -267,7 +267,7 @@ if __name__ == "__main__":
             log_str += f"\n---- ETA {time_left}"
             print(log_str)
 
-            if epoch_i % gm_cfg.val_epoch_interval == 0:
+            if epoch_i % gm_cfg.val_epoch_interval == (gm_cfg.val_epoch_interval - 1):
                 print("\n---- Evaluating Model ----")
                 precision, recall, AP, f1, ap_class = gm_cfg.evaluate_net(gm_net)
                 evaluation_metrics = [
@@ -288,24 +288,20 @@ if __name__ == "__main__":
 
                 if (epoch_i >gm_cfg.save_epoch_begin and epoch_i %gm_cfg.save_epoch_interval == 1):
                     # save weight at regular interval
-                    torch.save(obj = gm_netD.state_dict(), 
-                        f = gm_cfg.name_save_model("processing_netD", epoch_i))
-                    torch.save(obj = gm_netG.state_dict(), 
-                        f = gm_cfg.name_save_model("processing_netG", epoch_i))
+                    torch.save(obj = gm_net.state_dict(), 
+                        f = gm_cfg.name_save_model("processing_yolo", epoch_i))
             
 
                 gm_cfg.log_epoch_txt.flush()
         
         # end the train process(training_epoch_amount times to reuse the data)
-        torch.save(obj = gm_netD.state_dict(),  f = gm_cfg.name_save_model("ending_netD"))
-        torch.save(obj = gm_netG.state_dict(),  f = gm_cfg.name_save_model("ending_netG"))
+        torch.save(obj = gm_net.state_dict(),  f = gm_cfg.name_save_model("ending_yolo"))
         gm_cfg.log_epoch_txt.close()
         gm_cfg.writer.close()
 
     except KeyboardInterrupt:
         print("Save the Inter.pth".center(60, "*"))
-        torch.save(obj = gm_netD.state_dict(), f = gm_cfg.name_save_model("interrupt_netD"))
-        torch.save(obj = gm_netG.state_dict(), f = gm_cfg.name_save_model("interrupt_netG"))
+        torch.save(obj = gm_netD.state_dict(), f = gm_cfg.name_save_model("interrupt_yolo"))
 
 
 

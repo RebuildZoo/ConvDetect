@@ -1,6 +1,7 @@
 # from https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/utils/parse_config.py
 import torch 
 import numpy as np 
+import tqdm
 
 def load_classes(path):
         """
