@@ -28,18 +28,18 @@ import torch.optim as optim
 
 class YOLOtrain_config(ut_cfg.config):
     def __init__(self):
-        super(YOLOtrain_config, self).__init__(pBs = 2, pWn = 1, p_force_cpu = False)
+        super(YOLOtrain_config, self).__init__(pBs = 16, pWn = 1, p_force_cpu = False)
 
         self.path_save_mdroot = self.check_path_valid(os.path.join(ROOT, "outputs", "yolov3"))
         localtime = time.localtime(time.time())
         self.path_save_mdid = "vocimg416pre_" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
 
-        self.path_yolocfg_file = r"official_yolo_files\configs\yolov3_cls20.cfg" # yolov3_cls20.cfg
+        self.path_yolocfg_file = r"official_yolo_files\configs\yolov3-tiny_cls20.cfg" # yolov3_cls20.cfg
         self.path_classname_file =  r"official_yolo_files\data_names\voc.names"
         self.class_Lst = ut_prs.load_classes(self.path_classname_file)
         self.path_trainlist_file = r"F:\ZimengZhao_Data\VOC2012\VOCtrainval_11-May-2012\2012_train.txt"
         self.path_vallist_file = r"F:\ZimengZhao_Data\VOC2012\VOCtrainval_11-May-2012\2012_val.txt"
-        self.path_weight_file = r"E:\ZimengZhao_Program\RebuidZoo\ConvDetect\official_yolo_files\weights\darknet53.conv.74_backbone.weights"
+        self.path_weight_file = os.path.join(self.path_save_mdroot, "tiny-vocimg416pre_0803yolo_160trian0.pth")
         
         self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "vocimg416pre_epoch_loss_log.txt"), 'a+')
         self.writer = SummaryWriter(log_dir=os.path.join(self.path_save_mdroot, "board"))
