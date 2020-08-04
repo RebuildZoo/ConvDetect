@@ -28,26 +28,26 @@ import torch.optim as optim
 
 class YOLOtrain_config(ut_cfg.config):
     def __init__(self):
-        super(YOLOtrain_config, self).__init__(pBs = 16, pWn = 2, p_force_cpu = False)
+        super(YOLOtrain_config, self).__init__(pBs = 2, pWn = 1, p_force_cpu = False)
 
         self.path_save_mdroot = self.check_path_valid(os.path.join(ROOT, "outputs", "yolov3"))
         localtime = time.localtime(time.time())
-        self.path_save_mdid = "vocimg416_" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
+        self.path_save_mdid = "vocimg416pre_" + "%02d%02d"%(localtime.tm_mon, localtime.tm_mday)
 
-        self.path_yolocfg_file = r"official_yolo_files\configs\yolov3-tiny_cls20.cfg" # yolov3_cls20.cfg
+        self.path_yolocfg_file = r"official_yolo_files\configs\yolov3_cls20.cfg" # yolov3_cls20.cfg
         self.path_classname_file =  r"official_yolo_files\data_names\voc.names"
         self.class_Lst = ut_prs.load_classes(self.path_classname_file)
         self.path_trainlist_file = r"F:\ZimengZhao_Data\VOC2012\VOCtrainval_11-May-2012\2012_train.txt"
         self.path_vallist_file = r"F:\ZimengZhao_Data\VOC2012\VOCtrainval_11-May-2012\2012_val.txt"
-        # self.pretrained_weights = r""
+        self.path_weight_file = r"E:\ZimengZhao_Program\RebuidZoo\ConvDetect\official_yolo_files\weights\darknet53.conv.74_backbone.weights"
         
-        self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "infomnist_z10unspv_MSE_epoch_loss_log.txt"), 'a+')
+        self.log_epoch_txt = open(os.path.join(self.path_save_mdroot, "vocimg416pre_epoch_loss_log.txt"), 'a+')
         self.writer = SummaryWriter(log_dir=os.path.join(self.path_save_mdroot, "board"))
 
         self.training_epoch_amount = 160
         self.save_epoch_begin = 50
-        self.save_epoch_interval = 20
-        self.val_epoch_interval = 40
+        self.save_epoch_interval = 10
+        self.val_epoch_interval = 20
 
         self.gradient_accumulations = 2 # number of gradient accums before step
 
@@ -58,12 +58,11 @@ class YOLOtrain_config(ut_cfg.config):
 
         self.netin_size = 416
 
-        self.compute_mAP = False # if True computes mAP every 10th batch. 
         self.multiscale_training = True
 
-        self.method_init ="norm"  #"preTrain" #"kaming" #"xavier" # "norm"
+        self.method_init ="preTrain"  #"preTrain" #"kaming" #"xavier" # "norm"
 
-        self.opt_baseLr = 1e-3
+        self.opt_baseLr = 1e-4
         self.opt_beta1 = 0.5
         self.opt_weightdecay = 3e-6
 
@@ -234,15 +233,18 @@ if __name__ == "__main__":
                     # Accumulates gradient before each step
                     gm_optimizer.step()
                     gm_optimizer.zero_grad()
-                    log_str = "\n---- [Epoch %d/%d, Batch %d/%d] ----\n" % (epoch_i, gm_cfg.training_epoch_amount, batch_i, len(gm_trainloader))
+                if batch_i % 10 == 1:
+                    log_str = "\n---- [Epoch %d/%d, Batch %d/%d]: " % (epoch_i, gm_cfg.training_epoch_amount, batch_i, len(gm_trainloader))
                     print(log_str, loss.item())
                 metric_table = [["Metrics", *[f"YOLO Layer {i}" for i in range(len(gm_net.yolo_layers))]]]
                 
             # end an epoch
             delta_t = (time.time()- start)/60
             avg_loss = sum(loss_an_epoch_Lst)/len(loss_an_epoch_Lst)
+            gm_scheduler.step(avg_loss)
+        
+            gm_cfg.log_in_board("vocimg416pre_training loss", {"avg_loss": avg_loss}, epoch_i)
             loss_an_epoch_Lst.clear()
-            gm_cfg.log_in_board("vocimg416_training loss", {"avg_loss": avg_loss}, epoch_i)
             # Log metrics at each YOLO layer
             for i, metric in enumerate(gm_metrics):
                 formats = {m: "%.6f" for m in gm_metrics}
@@ -257,15 +259,17 @@ if __name__ == "__main__":
                     for name, metric in yolo.metrics.items():
                         if name != "grid_size":
                             # tensorboard_log += [(f"{name}_{j+1}", metric)]
-                            gm_cfg.log_in_board("vocimg416_yololayer%d_"%(j) + name, {name: metric}, epoch_i)
+                            gm_cfg.log_in_board("vocimg416pre_yololayer%d_"%(j) + name, {name: metric}, epoch_i)
             
-            log_str = AsciiTable(metric_table).table
+            log_str = "\n---- [Epoch %d/%d] ----\n"%(epoch_i, gm_cfg.training_epoch_amount)
+            log_str += AsciiTable(metric_table).table
             log_str += f"\nTotal loss {avg_loss}"
             # Determine approximate time left for epoch
             epoch_batches_left = len(gm_trainloader) - (batch_i + 1)
             time_left = datetime.timedelta(seconds=epoch_batches_left * (time.time() - start) / (batch_i + 1))
             log_str += f"\n---- ETA {time_left}"
-            print(log_str)
+            gm_cfg.log_in_file(log_str)
+            gm_cfg.log_epoch_txt.flush()
 
             if epoch_i % gm_cfg.val_epoch_interval == (gm_cfg.val_epoch_interval - 1):
                 print("\n---- Evaluating Model ----")
@@ -277,23 +281,21 @@ if __name__ == "__main__":
                     ("val_f1", f1.mean()),
                 ]
                 for metric_i in evaluation_metrics:
-                    gm_cfg.log_in_board("vocimg416_vali_" + metric_i[0], {metric_i[0]: metric_i[1]}, epoch_i)
+                    gm_cfg.log_in_board("vocimg416pre_vali_" + metric_i[0], {metric_i[0]: metric_i[1]}, epoch_i)
             
                 # Print class APs and mAP
                 ap_table = [["Index", "Class name", "AP"]]
                 for i, c in enumerate(ap_class):
                     ap_table += [[c, gm_cfg.class_Lst[c], "%.5f" % AP[i]]]
-                print(AsciiTable(ap_table).table)
-                print(f"---- mAP {AP.mean()}")
-
-                if (epoch_i >gm_cfg.save_epoch_begin and epoch_i %gm_cfg.save_epoch_interval == 1):
-                    # save weight at regular interval
-                    torch.save(obj = gm_net.state_dict(), 
-                        f = gm_cfg.name_save_model("processing_yolo", epoch_i))
-            
-
+                gm_cfg.log_in_file(AsciiTable(ap_table).table)
+                gm_cfg.log_in_file(f"---- mAP {AP.mean()}")
                 gm_cfg.log_epoch_txt.flush()
-        
+
+            if (epoch_i >gm_cfg.save_epoch_begin and epoch_i %gm_cfg.save_epoch_interval == 1):
+                # save weight at regular interval
+                torch.save(obj = gm_net.state_dict(), 
+                    f = gm_cfg.name_save_model("processing_yolo", epoch_i))
+
         # end the train process(training_epoch_amount times to reuse the data)
         torch.save(obj = gm_net.state_dict(),  f = gm_cfg.name_save_model("ending_yolo"))
         gm_cfg.log_epoch_txt.close()
@@ -301,12 +303,9 @@ if __name__ == "__main__":
 
     except KeyboardInterrupt:
         print("Save the Inter.pth".center(60, "*"))
-        torch.save(obj = gm_netD.state_dict(), f = gm_cfg.name_save_model("interrupt_yolo"))
+        torch.save(obj = gm_net.state_dict(), f = gm_cfg.name_save_model("interrupt_yolo"))
+        gm_net.save_darknet_weights(gm_cfg.name_save_model("interrupt_yolo").replace(".pth", ".weights"))
 
-
-
-
-                
 
 
 

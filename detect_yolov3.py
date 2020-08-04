@@ -30,14 +30,14 @@ class YOLOdetect_config(ut_cfg.config):
         self.path_class_file =  r"official_yolo_files\data_names\coco.names"
         self.class_Lst = ut_prs.load_classes(self.path_class_file)
 
-        self.imgs_dir = self.check_path_valid(r"test_samples\yolo_samples")
+        self.imgs_dir = self.check_path_valid(r"test_samples\voc_samples")
         self.res_dir =self.check_path_valid(os.path.join(self.imgs_dir, "results"))
 
         self.method_init = "preTrain"
 
         # for non_max_suppression:
         self.iou_thres = 0.5 # iou threshold required to qualify as detected
-        self.conf_thres = 0.85 # object confidence threshold
+        self.conf_thres = 0.65 # object confidence threshold
         self.nms_thres = 0.4 # iou thresshold for non-maximum suppression
         # for net input map size
         self.netin_size = 416
